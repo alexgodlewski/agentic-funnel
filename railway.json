@@ -1,0 +1,12 @@
+{
+  "$schema": "https://railway.com/railway.schema.json",
+  "build": {
+    "builder": "RAILPACK",
+    "buildCommand": "corepack enable && pnpm install --frozen-lockfile && pnpm --filter @agentic-funnel/web build"
+  },
+  "deploy": {
+    "startCommand": "sh start.sh",
+    "restartPolicyType": "ON_FAILURE",
+    "restartPolicyMaxRetries": 3
+  }
+}

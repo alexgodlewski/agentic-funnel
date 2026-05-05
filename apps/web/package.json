@@ -1,0 +1,29 @@
+{
+  "name": "@agentic-funnel/web",
+  "version": "0.1.0",
+  "private": false,
+  "type": "module",
+  "scripts": {
+    "dev": "astro dev --host 127.0.0.1 --port 4321",
+    "predev": "tsx scripts/sync-stripe-products.ts --mode=dev",
+    "build": "tsx scripts/build-with-env.ts",
+    "prebuild": "tsx scripts/sync-stripe-products.ts --mode=build",
+    "sync:stripe": "tsx scripts/sync-stripe-products.ts --mode=dev",
+    "preview": "astro preview",
+    "check": "astro check"
+  },
+  "dependencies": {
+    "@astrojs/check": "latest",
+    "@astrojs/node": "latest",
+    "@aws-sdk/client-s3": "latest",
+    "@aws-sdk/s3-request-presigner": "latest",
+    "@agentic-funnel/db": "workspace:*",
+    "@agentic-funnel/shared": "workspace:*",
+    "astro": "latest",
+    "drizzle-orm": "latest",
+    "pg-boss": "latest",
+    "posthog-js": "latest",
+    "stripe": "latest",
+    "zod": "latest"
+  }
+}

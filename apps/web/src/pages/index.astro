@@ -1,0 +1,119 @@
+---
+import FunnelLayout from "../layouts/FunnelLayout.astro";
+
+const features = [
+  "Stripe Payment Element checkout",
+  "Order bumps before payment",
+  "Post-purchase OTO and downsell routes",
+  "Signed digital download links",
+  "Worker jobs for fulfillment and analytics",
+  "Postgres, Drizzle, pg-boss, and S3-compatible storage"
+];
+---
+
+<FunnelLayout
+  title="AgenticFunnel Starter"
+  description="Open-source Stripe funnel infrastructure for digital products."
+  pageClass="landing"
+>
+  <main class="slc-page">
+    <section class="slc-section" data-section="hero">
+      <div class="slc-shell hero-inner">
+        <div class="hero-copy">
+          <span class="hero-kicker">AgenticFunnel starter</span>
+          <h1>Open-source checkout funnel starter.</h1>
+          <p>
+            This public starter keeps the funnel mechanics visible while leaving the sales page,
+            visual identity, copy, and product assets for you to replace.
+          </p>
+          <div class="hero-actions">
+            <a class="hero-cta" href="/checkout" data-opt-in-trigger>
+              <span>Open checkout demo</span>
+            </a>
+            <a class="hero-secondary" href="https://github.com/alexgodlewski/agentic-funnel">View repository</a>
+          </div>
+        </div>
+        <aside class="hero-proof" aria-label="Starter funnel summary">
+          <strong>Included flow</strong>
+          <ol>
+            <li>Buyer enters contact details</li>
+            <li>Checkout creates a Stripe PaymentIntent</li>
+            <li>Optional bumps and post-purchase offers run</li>
+            <li>Thank-you page delivers signed links</li>
+          </ol>
+        </aside>
+      </div>
+    </section>
+
+    <section class="slc-section" data-section="features">
+      <div class="slc-shell">
+        <span class="section-kicker">What is wired</span>
+        <h2>Application plumbing without a published sales design.</h2>
+        <div class="feature-grid">
+          {features.map((feature) => (
+            <article class="feature-card">
+              <span aria-hidden="true">-</span>
+              <p>{feature}</p>
+            </article>
+          ))}
+        </div>
+      </div>
+    </section>
+
+    <section class="slc-section final-cta" data-section="cta">
+      <div class="slc-shell">
+        <span class="section-kicker">Customize first</span>
+        <h2>Replace this page before promoting your offer.</h2>
+        <p>
+          Treat this route as a neutral placeholder. Add your own landing page, product images,
+          legal copy, real fulfillment files, and Stripe prices before launch.
+        </p>
+        <a class="hero-cta" href="/checkout" data-opt-in-trigger>
+          <span>Continue to checkout</span>
+        </a>
+      </div>
+    </section>
+
+    <footer class="site-footer">
+      <nav class="site-footer-links" aria-label="Legal links">
+        <a href="/terms">Terms</a>
+        <span aria-hidden="true">·</span>
+        <a href="/privacy">Privacy</a>
+        <span aria-hidden="true">·</span>
+        <a href="/company">Company</a>
+      </nav>
+      <p class="site-footer-copy">© {new Date().getFullYear()} AgenticFunnel Starter.</p>
+    </footer>
+  </main>
+
+  <div
+    class="sr-only"
+    data-page-config="home"
+    data-funnel-key="starter-funnel"
+    data-posthog-key={import.meta.env.PUBLIC_POSTHOG_KEY}
+    data-api-host={import.meta.env.PUBLIC_POSTHOG_HOST}
+    data-meta-pixel-id={import.meta.env.PUBLIC_META_PIXEL_ID}
+    data-anonymous-id={Astro.locals.anonymousId}
+  ></div>
+  <dialog id="opt-in-dialog" class="opt-in-dialog" data-funnel-key="starter-funnel" aria-labelledby="opt-in-dialog-title">
+    <form method="dialog" class="opt-in-card">
+      <button class="opt-in-close" value="cancel" aria-label="Close">×</button>
+      <span class="section-kicker">Before checkout</span>
+      <h2 id="opt-in-dialog-title">Where should we send access?</h2>
+      <p>Capture a lead before sending buyers to checkout. This is useful for cart recovery and nurture flows.</p>
+      <label>
+        <span>First name</span>
+        <input name="firstName" autocomplete="given-name" placeholder="Jordan" />
+      </label>
+      <label>
+        <span>Email</span>
+        <input name="email" type="email" autocomplete="email" placeholder="you@example.com" required data-mask />
+      </label>
+      <button class="hero-cta" type="submit">Continue</button>
+      <p class="opt-in-fine">Replace this consent copy with your own legal text before launch.</p>
+    </form>
+  </dialog>
+  <script>
+    import "../lib/client/page-home";
+  </script>
+</FunnelLayout>

@@ -1,0 +1,13 @@
+{
+  "name": "@agentic-funnel/shared",
+  "version": "0.1.0",
+  "private": false,
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts",
+    "./crypto": "./src/crypto.ts"
+  },
+  "dependencies": {
+    "zod": "latest"
+  }
+}

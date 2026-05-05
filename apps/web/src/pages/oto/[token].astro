@@ -1,0 +1,126 @@
+---
+import FunnelLayout from "../../layouts/FunnelLayout.astro";
+import { getOfferPageData, getPreviewOfferPageData } from "../../lib/server/services/offer-service";
+
+const token = Astro.params.token ?? "";
+const isPreview = import.meta.env.DEV && Astro.url.searchParams.has("preview");
+let offerPage: Awaited<ReturnType<typeof getOfferPageData>> | null = null;
+let errorMessage = "";
+
+try {
+  offerPage = isPreview ? getPreviewOfferPageData("oto") : await getOfferPageData(token, Astro.request);
+} catch (error) {
+  errorMessage = error instanceof Error ? error.message : "Offer is unavailable";
+}
+
+function formatMoney(amount: number, currency = "usd") {
+  return new Intl.NumberFormat("en-US", {
+    style: "currency",
+    currency: currency.toUpperCase(),
+    minimumFractionDigits: 0,
+    maximumFractionDigits: 0
+  }).format(amount / 100);
+}
+---
+
+<FunnelLayout
+  title={offerPage ? `One-time offer: ${offerPage.offer.name}` : "Offer expired"}
+  description="Starter one-time offer page."
+  pageClass="checkout-v2"
+>
+  <main class="co oto-flow">
+    {
+      offerPage ? (
+        <form data-section="oto-offer">
+          <section class="co-block">
+            <span class="co-eyebrow">One-time offer</span>
+            <h1 class="co-title">Add <em>{offerPage.offer.name}</em> to this order.</h1>
+            <p class="co-subtitle">
+              This starter OTO demonstrates how to charge a saved payment method after the core checkout.
+              Replace the copy with the natural next step for your own product.
+            </p>
+
+            <article class="bump is-selected oto-buy-card">
+              <div class="bump-body bump-body--single">
+                <div class="bump-copy">
+                  <span class="bump-badge">Only shown after purchase</span>
+                  <h2 class="bump-headline">
+                    <span class="bump-headline-name">{offerPage.offer.name}</span>
+                    <span class="bump-price">
+                      <strong>{formatMoney(offerPage.offer.unitAmount, offerPage.currency)}</strong>
+                    </span>
+                  </h2>
+                  <p class="bump-desc">
+                    Use this page for a higher-value workshop, implementation kit, or premium upgrade.
+                    AgenticFunnel handles the token, acceptance, decline, expiry, and fulfillment flow.
+                  </p>
+                  <ul class="bump-bullets">
+                    <li>Charged as a post-purchase offer</li>
+                    <li>Delivered through the same thank-you and email flow</li>
+                    <li>Falls through to the downsell if the buyer declines</li>
+                  </ul>
+                </div>
+              </div>
+            </article>
+
+            <div class="co-oto-timer" id="offer-timer" role="timer" aria-live="polite">
+              Offer expires soon
+            </div>
+            <div class="co-status status-banner" id="offer-status" hidden />
+
+            <div class="co-prepare-row">
+              <button class="co-cta co-cta--primary" id="accept-offer" type="button">
+                <span>Add for {formatMoney(offerPage.offer.unitAmount, offerPage.currency)}</span>
+                <span class="co-cta-arrow" aria-hidden="true">→</span>
+              </button>
+              <button class="co-cta-decline" id="decline-offer" type="button">
+                No thanks, continue
+              </button>
+            </div>
+          </section>
+        </form>
+      ) : (
+        <section class="co-block co-empty" data-section="oto-missing">
+          <span class="co-eyebrow">Offer expired</span>
+          <h1 class="co-h2 co-h2--xl">This offer is no longer available.</h1>
+          <p class="co-muted">{errorMessage || "The secure offer token has expired."}</p>
+          <div class="co-prepare-row co-prepare-row--inline">
+            <a class="co-cta co-cta--primary" href="/checkout">
+              <span>Return to checkout</span>
+              <span class="co-cta-arrow" aria-hidden="true">→</span>
+            </a>
+            <a class="co-cta-decline" href="/">Home</a>
+          </div>
+        </section>
+      )
+    }
+  </main>
+
+  {offerPage && (
+    <>
+      <div
+        class="sr-only"
+        data-page-config="offer"
+        data-offer-kind="oto"
+        data-funnel-key={offerPage.funnelKey ?? ""}
+        data-token={offerPage.token}
+        data-order-id={offerPage.orderId}
+        data-expires-at={offerPage.expiresAt}
+        data-posthog-key={import.meta.env.PUBLIC_POSTHOG_KEY}
+        data-api-host={import.meta.env.PUBLIC_POSTHOG_HOST}
+        data-meta-pixel-id={import.meta.env.PUBLIC_META_PIXEL_ID}
+        data-anonymous-id={Astro.locals.anonymousId}
+        data-meta-view-event-id={offerPage.metaEventId}
+        data-offer-sku={offerPage.offer.sku}
+        data-offer-name={offerPage.offer.name}
+        data-offer-amount={String(offerPage.offer.unitAmount)}
+        data-currency={offerPage.currency}
+        data-stripe-publishable-key={import.meta.env.PUBLIC_STRIPE_PUBLISHABLE_KEY}
+        data-buyer-email={offerPage.buyerEmail}
+      />
+      <script>
+        import "../../lib/client/page-offer";
+      </script>
+    </>
+  )}
+</FunnelLayout>

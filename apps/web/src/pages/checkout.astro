@@ -1,0 +1,318 @@
+---
+import FunnelLayout from "../layouts/FunnelLayout.astro";
+import { buildCheckoutQuote, getFunnelDefinition } from "../lib/config/funnels";
+
+const requestedFunnelKey = Astro.url.searchParams.get("funnel") ?? "starter-funnel";
+const funnel = (() => {
+  try {
+    return getFunnelDefinition(requestedFunnelKey);
+  } catch {
+    return getFunnelDefinition("starter-funnel");
+  }
+})();
+
+const baseQuote = buildCheckoutQuote(funnel.key, []);
+const stripePublishableKey = import.meta.env.PUBLIC_STRIPE_PUBLISHABLE_KEY;
+const stripeConfigured = !/(placeholder|changeme|replace|example|dummy|local_placeholder)/i.test(
+  stripePublishableKey
+);
+
+function formatMoney(amount: number) {
+  return new Intl.NumberFormat("en-US", {
+    style: "currency",
+    currency: funnel.currency.toUpperCase(),
+    minimumFractionDigits: 0,
+    maximumFractionDigits: 0
+  }).format(amount / 100);
+}
+
+const bumpsForClient = funnel.orderBumps.map((b) => ({
+  sku: b.sku,
+  name: b.name,
+  unitAmount: b.unitAmount
+}));
+---
+
+<FunnelLayout
+  title="Checkout | AgenticFunnel Starter"
+  description="Secure Stripe checkout for the AgenticFunnel starter product."
+  pageClass="checkout-v2"
+>
+  <main class="co">
+    <header class="co-topbar">
+      <a class="co-brand" href="/">
+        <span class="co-brand-text">AgenticFunnel Starter</span>
+      </a>
+      <div class="co-trust-mini">
+        <span class="co-trust-mini-icon" aria-hidden="true">🔒</span>
+        <span>Secure checkout · Stripe</span>
+      </div>
+    </header>
+
+    <h1 class="co-title">
+      One <em>secure step</em> before instant access
+    </h1>
+    <p class="co-subtitle">
+      Review the starter order, add optional upgrades, and test a complete digital-product checkout flow.
+      Fulfillment links are sent automatically after payment.
+    </p>
+
+    <div class="co-grid">
+      <form class="co-main" id="lead-form">
+        <section class="co-block">
+          <span class="co-eyebrow">Step · Contact</span>
+          <h2 class="co-h2">Buyer details</h2>
+          <p class="co-muted">Use any test buyer details while working locally.</p>
+
+          <div class="co-fields">
+            <div class="co-field">
+              <label for="firstName">First name</label>
+              <input id="firstName" name="firstName" autocomplete="given-name" placeholder="Jordan" />
+            </div>
+            <div class="co-field">
+              <label for="email">E-mail</label>
+              <input
+                id="email"
+                name="email"
+                type="email"
+                autocomplete="email"
+                placeholder="you@example.com"
+                required
+                data-mask
+              />
+            </div>
+          </div>
+        </section>
+
+        <section class="co-block">
+          <span class="co-eyebrow">Optional order bumps</span>
+          <h2 class="co-h2">Add helpful upgrades</h2>
+
+          {funnel.orderBumps.map((bump) => (
+            <article class="bump" data-bump-card={bump.sku}>
+              <header class="bump-toggle">
+                <span class="bump-arrow" aria-hidden="true">→</span>
+                <label class="bump-toggle-label" for={`bump-${bump.sku}`}>
+                  <input
+                    id={`bump-${bump.sku}`}
+                    type="checkbox"
+                    data-bump-toggle
+                    data-bump-sku={bump.sku}
+                    data-bump-amount={String(bump.unitAmount)}
+                  />
+                  <span class="bump-toggle-box" aria-hidden="true"></span>
+                  <span class="bump-toggle-text">
+                    <strong>Yes.</strong> Add <em>{bump.name}</em> to my order.
+                  </span>
+                </label>
+              </header>
+
+              <div class="bump-body">
+                {bump.image && (
+                  <figure class="bump-figure" aria-hidden="true">
+                    <img src={bump.image} alt="" loading="lazy" />
+                  </figure>
+                )}
+                <div class="bump-copy">
+                  {bump.badge && <span class="bump-badge">{bump.badge}</span>}
+                  <h3 class="bump-headline">
+                    <span class="bump-headline-name">{bump.name}</span>
+                    <span class="bump-price">
+                      {bump.crossedAmount && (
+                        <span class="bump-price-old">{formatMoney(bump.crossedAmount)}</span>
+                      )}
+                      <strong>{formatMoney(bump.unitAmount)}</strong>
+                    </span>
+                  </h3>
+                  <p class="bump-desc">{bump.description}</p>
+                  {bump.bullets && (
+                    <ul class="bump-bullets">
+                      {bump.bullets.map((b) => <li>{b}</li>)}
+                    </ul>
+                  )}
+                </div>
+              </div>
+            </article>
+          ))}
+        </section>
+
+        <section class="co-block">
+          <span class="co-eyebrow">Payment</span>
+          <h2 class="co-h2">Pay securely</h2>
+          <p class="co-muted">
+            Payment is handled by <strong>Stripe</strong>. Configure your own Stripe test prices, then use this page
+            to validate cards, wallets, and post-purchase offers.
+          </p>
+
+          <div class="co-status status-banner" id="checkout-status" hidden></div>
+
+          <div class="co-payment" id="payment-panel" hidden>
+            <!-- Express Checkout Element, only renders Apple Pay button on
+                 non-Safari browsers (with QR-code fallback for cross-device pay).
+                 On Safari it stays empty because Apple Pay is shown natively
+                 inside the accordion below. -->
+            <div id="express-checkout-element" class="co-express-element"></div>
+            <div id="payment-element" class="co-payment-element"></div>
+
+            <button class="co-cta" id="pay-button" type="button" hidden>
+              <span>Pay {formatMoney(baseQuote.totalAmount)}</span>
+              <span class="co-cta-arrow" aria-hidden="true">→</span>
+            </button>
+
+            <div class="co-demo-shell" id="demo-shell" hidden>
+              <p class="co-muted">
+                Stripe is not configured yet. This button simulates a successful payment so you can test the
+                funnel flow end to end.
+              </p>
+              <button class="co-cta" id="demo-button" type="button">
+                <span>Simulate payment (demo)</span>
+                <span class="co-cta-arrow" aria-hidden="true">→</span>
+              </button>
+            </div>
+          </div>
+
+          <div class="co-prepare-row">
+            <button class="co-cta co-cta--primary" id="prepare-button" type="submit">
+              <span>Continue to payment</span>
+              <span class="co-cta-arrow" aria-hidden="true">→</span>
+            </button>
+            <p class="co-fine">
+              By continuing, you accept the <a href="/terms">terms</a>. Totals are recalculated server-side before
+              payment is created.
+            </p>
+          </div>
+        </section>
+
+        <ul class="co-trust-row" aria-label="Order trust signals">
+          <li><span aria-hidden="true">🔒</span> SSL / Stripe</li>
+          <li><span aria-hidden="true">🛡️</span> Replace with your guarantee</li>
+          <li><span aria-hidden="true">⚡</span> Instant fulfillment</li>
+          <li><span aria-hidden="true">💳</span> Cards · wallets</li>
+        </ul>
+      </form>
+
+      <aside class="co-summary" data-summary>
+        <div class="co-summary-sticky">
+          <span class="co-eyebrow">Your order</span>
+          <h2 class="co-h2">Summary</h2>
+
+          <div class="co-summary-list">
+            <div class="co-summary-row co-summary-row--core">
+              <div>
+                <strong>{funnel.core.name}</strong>
+                <small>starter product + bonuses</small>
+              </div>
+              <strong>{formatMoney(funnel.core.unitAmount)}</strong>
+            </div>
+
+            {funnel.orderBumps.map((bump) => (
+              <div class="co-summary-row" data-summary-bump-sku={bump.sku} hidden>
+                <div>
+                  <strong>{bump.name}</strong>
+                  <small>add-on</small>
+                </div>
+                <strong>{formatMoney(bump.unitAmount)}</strong>
+              </div>
+            ))}
+          </div>
+
+          <div class="co-summary-row co-summary-row--discount" id="summary-discount-row" hidden>
+            <div>
+              <strong id="summary-discount-label">Discount</strong>
+              <small>promo code</small>
+            </div>
+            <strong id="summary-discount-figure">−</strong>
+          </div>
+
+          <div class="co-summary-total">
+            <span>Total</span>
+            <strong id="summary-total-figure">{formatMoney(baseQuote.totalAmount)}</strong>
+          </div>
+          <span id="summary-total-inline" hidden>{formatMoney(baseQuote.totalAmount)}</span>
+
+          <ul class="co-summary-perks">
+            <li>
+              <span class="co-perk-icon" aria-hidden="true">✓</span>
+              <span>Instant access after payment</span>
+            </li>
+            <li>
+              <span class="co-perk-icon" aria-hidden="true">✓</span>
+              <span>Replace this with your refund policy</span>
+            </li>
+            <li>
+              <span class="co-perk-icon" aria-hidden="true">✓</span>
+              <span>Secure Stripe payments</span>
+            </li>
+          </ul>
+
+          <ul class="co-summary-quotes">
+            <li>
+              <p>"Swap these starter testimonials for real customer proof before launch."</p>
+              <cite>Starter testimonial</cite>
+            </li>
+            <li>
+              <p>"The checkout, bump, and thank-you flow are wired so you can focus on your offer."</p>
+              <cite>AgenticFunnel example</cite>
+            </li>
+            <li>
+              <p>"Keep the structure, replace the copy, and ship your own digital product."</p>
+              <cite>AgenticFunnel example</cite>
+            </li>
+          </ul>
+        </div>
+      </aside>
+    </div>
+
+    <footer class="site-footer">
+      <nav class="site-footer-links" aria-label="Legal links">
+        <a href="/terms">Terms</a>
+        <span aria-hidden="true">·</span>
+        <a href="/privacy">Privacy</a>
+        <span aria-hidden="true">·</span>
+        <a href="/company">Company</a>
+      </nav>
+      <p class="site-footer-copy">© {new Date().getFullYear()} AgenticFunnel Starter.</p>
+    </footer>
+  </main>
+
+  <!-- Mobile-only bottom sheet, abbreviated summary collapsed at the bottom of
+       the viewport, expands to full summary on tap. -->
+  <div class="co-mobile-sheet" id="mobile-summary-sheet" hidden>
+    <button class="co-mobile-sheet-bar" id="mobile-sheet-toggle" type="button" aria-expanded="false" aria-controls="mobile-sheet-body">
+      <span class="co-mobile-sheet-icon" aria-hidden="true">
+        🛒
+        <span class="co-mobile-sheet-icon-badge" id="mobile-sheet-badge">1</span>
+      </span>
+      <span class="co-mobile-sheet-info">
+        <small id="mobile-sheet-extra">Your order</small>
+        <strong id="mobile-sheet-product">{funnel.core.name}</strong>
+      </span>
+      <span class="co-mobile-sheet-amount">
+        <strong id="mobile-sheet-total">{formatMoney(baseQuote.totalAmount)}</strong>
+        <span class="co-mobile-sheet-chevron" aria-hidden="true">▲</span>
+      </span>
+    </button>
+    <div class="co-mobile-sheet-body" id="mobile-sheet-body"></div>
+    <div class="co-mobile-sheet-backdrop" id="mobile-sheet-backdrop"></div>
+  </div>
+
+  <div
+    class="sr-only"
+    data-page-config="checkout"
+    data-funnel-key={funnel.key}
+    data-stripe-publishable-key={stripePublishableKey}
+    data-stripe-configured={String(stripeConfigured)}
+    data-posthog-key={import.meta.env.PUBLIC_POSTHOG_KEY}
+    data-api-host={import.meta.env.PUBLIC_POSTHOG_HOST}
+    data-meta-pixel-id={import.meta.env.PUBLIC_META_PIXEL_ID}
+    data-anonymous-id={Astro.locals.anonymousId}
+    data-core-amount={String(funnel.core.unitAmount)}
+    data-core-sku={funnel.core.sku}
+    data-core-name={funnel.core.name}
+    data-bumps={JSON.stringify(bumpsForClient)}
+    data-currency={baseQuote.currency}
+  ></div>
+  <script>
+    import "../lib/client/page-checkout";
+  </script>
+</FunnelLayout>

@@ -1,0 +1,109 @@
+---
+import "../styles/funnel.css";
+
+type Props = {
+  title: string;
+  description: string;
+  pageClass?: string;
+  lang?: string;
+  ogImage?: string;
+  canonical?: string;
+};
+
+const {
+  title,
+  description,
+  pageClass = "",
+  lang = "en",
+  ogImage = "/og-starter.png",
+  canonical
+} = Astro.props;
+
+const canonicalUrl = canonical ?? new URL(Astro.url.pathname, Astro.site ?? Astro.url).toString();
+const ogImageUrl = new URL(ogImage, Astro.site ?? Astro.url).toString();
+
+const placeholderPattern = /(placeholder|changeme|replace|example|dummy|local_placeholder)/i;
+const metaPixelId = import.meta.env.PUBLIC_META_PIXEL_ID;
+const pixelEnabled = Boolean(metaPixelId) && !placeholderPattern.test(metaPixelId ?? "");
+
+const hyrosDomain = import.meta.env.PUBLIC_HYROS_TRACKING_DOMAIN;
+const hyrosPropertyHash = import.meta.env.PUBLIC_HYROS_PROPERTY_HASH;
+const hyrosEnabled =
+  Boolean(hyrosDomain) &&
+  Boolean(hyrosPropertyHash) &&
+  !placeholderPattern.test(hyrosDomain ?? "") &&
+  !placeholderPattern.test(hyrosPropertyHash ?? "");
+---
+
+<!doctype html>
+<html lang={lang}>
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>{title}</title>
+    <meta name="description" content={description} />
+    <meta name="color-scheme" content="light" />
+    <link rel="icon" type="image/jpeg" href="/favicon.jpg" />
+    <link rel="apple-touch-icon" href="/favicon.jpg" />
+    <link rel="canonical" href={canonicalUrl} />
+    <meta property="og:type" content="website" />
+    <meta property="og:locale" content={lang === "pl" ? "pl_PL" : "en_US"} />
+    <meta property="og:title" content={title} />
+    <meta property="og:description" content={description} />
+    <meta property="og:url" content={canonicalUrl} />
+    <meta property="og:image" content={ogImageUrl} />
+    <meta name="twitter:card" content="summary_large_image" />
+    <meta name="twitter:title" content={title} />
+    <meta name="twitter:description" content={description} />
+    <meta name="twitter:image" content={ogImageUrl} />
+    {pixelEnabled && (
+      <Fragment>
+        <script is:inline define:vars={{ metaPixelId }}>
+          (function(){
+            if (window.fbq) return;
+            var n = window.fbq = function(){
+              n.callMethod ? n.callMethod.apply(n, arguments) : n.queue.push(arguments);
+            };
+            if (!window._fbq) window._fbq = n;
+            n.push = n; n.loaded = true; n.version = '2.0'; n.queue = [];
+            var t = document.createElement('script');
+            t.async = true;
+            t.src = 'https://connect.facebook.net/en_US/fbevents.js';
+            var s = document.getElementsByTagName('script')[0];
+            s.parentNode.insertBefore(t, s);
+            window.fbq('init', metaPixelId);
+          })();
+        </script>
+        <noscript>
+          <img
+            height="1"
+            width="1"
+            style="display:none"
+            src={`https://www.facebook.com/tr?id=${metaPixelId}&ev=PageView&noscript=1`}
+            alt=""
+          />
+        </noscript>
+      </Fragment>
+    )}
+    {hyrosEnabled && (
+      <script is:inline define:vars={{ hyrosDomain, hyrosPropertyHash }}>
+        (function () {
+          var s = document.createElement('script');
+          s.type = 'text/javascript';
+          s.async = true;
+          s.src =
+            'https://' +
+            hyrosDomain +
+            '/v1/lst/universal-script?ph=' +
+            hyrosPropertyHash +
+            '&tag=!clicked&ref_url=' +
+            encodeURI(document.URL);
+          document.head.appendChild(s);
+        })();
+      </script>
+    )}
+  </head>
+  <body class={pageClass}>
+    <slot />
+  </body>
+</html>

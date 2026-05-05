@@ -1,0 +1,16 @@
+{
+  "name": "@agentic-funnel/db",
+  "version": "0.1.0",
+  "private": false,
+  "type": "module",
+  "scripts": {
+    "seed": "node --import tsx src/seed.ts"
+  },
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "dependencies": {
+    "drizzle-orm": "latest",
+    "pg": "latest"
+  }
+}

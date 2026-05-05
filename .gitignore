@@ -1,0 +1,21 @@
+node_modules
+.pnpm-store
+.astro
+dist
+coverage
+.env
+.env.local
+.env.*
+!.env.example
+.env.*.local
+*.log
+*.tsbuildinfo
+.claude/worktrees/
+.claude/skills/
+.claude/*.lock
+
+# macOS Finder metadata
+.DS_Store
+
+# Generated from Stripe after you add real Price IDs. AgenticFunnel commits a
+# starter version so tests and docs have a readable catalog before Stripe setup.

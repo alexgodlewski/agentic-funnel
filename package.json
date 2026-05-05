@@ -1,0 +1,47 @@
+{
+  "name": "agentic-funnel",
+  "version": "0.1.0",
+  "description": "Open-source Stripe funnel infrastructure for low-ticket digital products.",
+  "private": false,
+  "license": "MIT",
+  "keywords": [
+    "stripe",
+    "funnel",
+    "checkout",
+    "digital-products",
+    "astro",
+    "postgres",
+    "drizzle",
+    "low-ticket-sales"
+  ],
+  "packageManager": "pnpm@10.8.0",
+  "type": "module",
+  "engines": {
+    "node": ">=22.0.0"
+  },
+  "scripts": {
+    "dev:web": "sh -ac 'set -a; . ./.env; set +a; pnpm --filter @agentic-funnel/web dev'",
+    "dev:worker": "sh -ac 'set -a; . ./.env; set +a; pnpm --filter @agentic-funnel/worker dev'",
+    "check:web": "sh -ac 'set -a; . ./.env; set +a; pnpm --filter @agentic-funnel/web check'",
+    "check:worker": "sh -ac 'set -a; . ./.env; set +a; pnpm --filter @agentic-funnel/worker exec tsc --noEmit -p tsconfig.json'",
+    "build": "sh -ac 'set -a; . ./.env; set +a; pnpm --filter @agentic-funnel/web build'",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "db:check": "sh -ac 'set -a; . ./.env; set +a; pnpm --filter @agentic-funnel/db exec drizzle-kit check'",
+    "db:generate": "sh -ac 'set -a; . ./.env; set +a; pnpm --filter @agentic-funnel/db exec drizzle-kit generate'",
+    "db:push": "sh -ac 'set -a; . ./.env; set +a; pnpm --filter @agentic-funnel/db exec drizzle-kit push'",
+    "db:seed:assets": "sh -ac 'set -a; . ./.env; set +a; pnpm --filter @agentic-funnel/db seed'",
+    "local:up": "docker compose up -d",
+    "local:down": "docker compose down -v",
+    "local:logs": "docker compose logs -f postgres minio minio-setup"
+  },
+  "devDependencies": {
+    "@types/node": "latest",
+    "@types/pg": "latest",
+    "dotenv-cli": "latest",
+    "drizzle-kit": "latest",
+    "tsx": "latest",
+    "typescript": "^5.9.3",
+    "vitest": "latest"
+  }
+}

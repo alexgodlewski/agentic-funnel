@@ -1,0 +1,23 @@
+{
+  "name": "@agentic-funnel/worker",
+  "version": "0.1.0",
+  "private": false,
+  "type": "module",
+  "scripts": {
+    "dev": "node --import tsx src/index.ts",
+    "dev:watch": "node --watch --import tsx src/index.ts",
+    "start": "node --import tsx src/index.ts"
+  },
+  "dependencies": {
+    "@aws-sdk/client-s3": "latest",
+    "@aws-sdk/s3-request-presigner": "latest",
+    "@agentic-funnel/db": "workspace:*",
+    "@agentic-funnel/shared": "workspace:*",
+    "drizzle-orm": "latest",
+    "pg-boss": "latest",
+    "posthog-node": "latest",
+    "stripe": "latest",
+    "tsx": "latest",
+    "zod": "latest"
+  }
+}

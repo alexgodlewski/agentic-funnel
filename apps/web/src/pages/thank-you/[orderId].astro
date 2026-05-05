@@ -1,0 +1,385 @@
+---
+import FunnelLayout from "../../layouts/FunnelLayout.astro";
+import { getThankYouPageData } from "../../lib/server/services/public-page-service";
+import {
+  firePurchaseIfTerminal,
+  getPurchaseSnapshot
+} from "../../lib/server/services/purchase-settler";
+import { signDownloadToken } from "../../lib/server/services/download-token";
+
+const orderId = Astro.params.orderId ?? "";
+let orderPage:
+  | Awaited<ReturnType<typeof getThankYouPageData>>
+  | null = null;
+let errorMessage = "";
+let purchase: Awaited<ReturnType<typeof getPurchaseSnapshot>> = null;
+
+try {
+  if (!orderId) {
+    throw new Error("Order id missing");
+  }
+
+  orderPage = await getThankYouPageData(orderId);
+  purchase =
+    (await firePurchaseIfTerminal(orderId, Astro.request)) ??
+    (await getPurchaseSnapshot(orderId));
+} catch (error) {
+  errorMessage = error instanceof Error ? error.message : "Order not found";
+}
+
+function formatMoney(amount: number, currency = "usd") {
+  return new Intl.NumberFormat("en-US", {
+    style: "currency",
+    currency: currency.toUpperCase(),
+    minimumFractionDigits: 0,
+    maximumFractionDigits: 0
+  }).format(amount / 100);
+}
+
+const orderRefShort = orderPage?.order.id?.slice(0, 8).toUpperCase() ?? "";
+const buyerEmail = orderPage?.lead?.email ?? "";
+const buyerFirstName = orderPage?.lead?.firstName ?? "";
+const greetingName = buyerFirstName || "";
+
+// Build one download row per FILE (not per order line). A multi-file slot
+// (e.g., CORE = main ebook + 2 bonuses) generates 3 rows from a single line;
+// a single-file slot generates 1 row. Each row gets its own signed token
+// embedding `assetIndex` so /api/downloads picks the right entry from
+// metadata.assets[]. The download counter (max 5) stays per LINE, clicks
+// across all of a line's assets share the same budget.
+const MAX_DOWNLOADS = 5;
+type DownloadRow = {
+  key: string;
+  lineSku: string;
+  lineName: string;
+  lineKind: "core" | "order_bump" | "oto" | "downsell";
+  lineTotalAmount: number;
+  isFirstOfLine: boolean;
+  assetLabel: string;
+  url: string;
+  remaining: number;
+  exhausted: boolean;
+};
+const downloadRows: DownloadRow[] = [];
+let downloadExpiresAt = 0;
+if (orderPage) {
+  for (const line of orderPage.lines) {
+    const meta = (line.metadata ?? {}) as {
+      downloads?: number;
+      assets?: Array<{ label?: unknown; r2Key?: unknown }>;
+    };
+    const usedCount = Math.max(0, Number(meta.downloads ?? 0));
+    const remaining = Math.max(0, MAX_DOWNLOADS - usedCount);
+    const exhausted = remaining === 0;
+
+    const assets = Array.isArray(meta.assets)
+      ? meta.assets.filter(
+          (a): a is { label: string; r2Key: string } =>
+            typeof a?.label === "string" && typeof a?.r2Key === "string"
+        )
+      : [];
+
+    if (assets.length > 0) {
+      assets.forEach((asset, assetIndex) => {
+        const signed = signDownloadToken({
+          orderId: orderPage!.order.id,
+          sku: line.sku,
+          assetIndex
+        });
+        downloadRows.push({
+          key: `${line.sku}#${assetIndex}`,
+          lineSku: line.sku,
+          lineName: line.name,
+          lineKind: line.kind as DownloadRow["lineKind"],
+          lineTotalAmount: line.totalAmount,
+          isFirstOfLine: assetIndex === 0,
+          assetLabel: asset.label,
+          url: signed.url,
+          remaining,
+          exhausted
+        });
+        downloadExpiresAt = signed.expiresAt;
+      });
+    } else {
+      const signed = signDownloadToken({ orderId: orderPage!.order.id, sku: line.sku });
+      downloadRows.push({
+        key: line.sku,
+        lineSku: line.sku,
+        lineName: line.name,
+        lineKind: line.kind as DownloadRow["lineKind"],
+        lineTotalAmount: line.totalAmount,
+        isFirstOfLine: true,
+        assetLabel: line.name,
+        url: signed.url,
+        remaining,
+        exhausted
+      });
+      downloadExpiresAt = signed.expiresAt;
+    }
+  }
+}
+// Pretty TTL label for the UI ("48 hours", "47 hours")
+const hoursRemaining =
+  downloadExpiresAt > 0 ? Math.max(1, Math.round((downloadExpiresAt - Date.now()) / 3600000)) : 48;
+const ttlLabel = `${hoursRemaining} ${hoursRemaining === 1 ? "hour" : "hours"}`;
+
+// Build a browser-fired Order Confirmed payload. Mirrors the server-side
+// Order Completed event but is captured client-side from /thank-you/, so
+// PostHog auto-enriches it with $host, $session_entry_*, $current_url, etc.
+// — closing the attribution gap on server-fired events.
+const orderConfirmedPayload = orderPage
+  ? {
+      order_id: orderPage.order.id,
+      total: orderPage.order.totalAmount / 100,
+      revenue: orderPage.order.totalAmount / 100,
+      currency: orderPage.order.currency,
+      products: orderPage.lines.map((line) => ({
+        product_id: line.sku,
+        sku: line.sku,
+        name: line.name,
+        category: line.kind,
+        price: line.unitAmount / 100,
+        quantity: line.quantity
+      }))
+    }
+  : null;
+---
+
+<FunnelLayout
+  title={orderPage ? "Thank you! Order confirmed" : "Order not found"}
+  description="Order confirmation"
+  pageClass="thanks-page"
+>
+  <main class="ty">
+    <header class="ty-topbar">
+      <a class="ty-brand" href="/">
+        <span class="ty-brand-text">AgenticFunnel Starter</span>
+      </a>
+    </header>
+
+    {
+      orderPage ? (
+        <>
+          <section class="ty-hero">
+            <div class="ty-checkmark" aria-hidden="true">
+              <svg viewBox="0 0 64 64" width="64" height="64">
+                <circle class="ty-checkmark-circle" cx="32" cy="32" r="29" />
+                <path class="ty-checkmark-tick" d="M18 33 L28 43 L46 23" />
+              </svg>
+            </div>
+            <span class="ty-eyebrow">Payment confirmed</span>
+            <h1 class="ty-title">
+              {greetingName ? <>Thank you, <em>{greetingName}</em>!</> : <>Thank you for your purchase!</>}
+            </h1>
+            <p class="ty-subtitle">
+              Your order is confirmed. We sent the receipt and download links to
+              {" "}<strong>{buyerEmail || "your email"}</strong>.
+            </p>
+            <p class="ty-order-ref">
+              Order reference: <code>#{orderRefShort}</code>
+            </p>
+          </section>
+
+          <!-- HERO: full-width downloads, the primary action on this page -->
+          <section class="ty-downloads-hero">
+            <header class="ty-downloads-hero-head">
+              <div>
+                <span class="ty-downloads-eyebrow">⬇ Download now</span>
+                <h2 class="ty-downloads-title">Your files are ready</h2>
+                <p class="ty-downloads-sub">
+                  Click <strong>Download</strong> for each file. We also sent these links to
+                  {" "}<strong>{buyerEmail || "your email"}</strong>.
+                </p>
+              </div>
+              <div class="ty-downloads-meta-pill">
+                <span class="ty-pill-dot"></span>
+                Links active for {ttlLabel}
+              </div>
+            </header>
+
+            <ul class="ty-downloads-big">
+              {downloadRows.map((row, idx) => (
+                <li class="ty-download-big" style={`--i:${idx}`}>
+                  <div class="ty-download-big-icon" aria-hidden="true">
+                    <svg viewBox="0 0 32 32" width="28" height="28" fill="none" stroke="currentColor" stroke-width="1.7">
+                      <path d="M19 3H8a2 2 0 0 0-2 2v22a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2V10z" />
+                      <polyline points="19 3 19 10 26 10" />
+                      <line x1="11" y1="18" x2="21" y2="18" />
+                      <line x1="11" y1="22" x2="21" y2="22" />
+                    </svg>
+                  </div>
+                  <div class="ty-download-big-info">
+                    <strong>{row.assetLabel}</strong>
+                    <small>
+                      {row.lineKind === "core" && "Core product"}
+                      {row.lineKind === "order_bump" && "Add-on"}
+                      {row.lineKind === "oto" && "One-time offer"}
+                      {row.lineKind === "downsell" && "Special offer"}
+                      {row.isFirstOfLine && (
+                        <>
+                          <span class="ty-dot">·</span>
+                          {formatMoney(row.lineTotalAmount, orderPage.order.currency)}
+                        </>
+                      )}
+                      <span class="ty-dot">·</span>
+                      <span class={`ty-uses ${row.exhausted ? "is-exhausted" : ""}`}>
+                        {row.exhausted
+                          ? "Download limit used"
+                          : `${row.remaining} of ${MAX_DOWNLOADS} downloads left`}
+                      </span>
+                    </small>
+                  </div>
+                  {row.exhausted ? (
+                    <span class="ty-download-big-btn is-disabled" aria-disabled="true">
+                      <svg viewBox="0 0 16 16" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2">
+                        <circle cx="8" cy="8" r="7" />
+                        <line x1="3.5" y1="3.5" x2="12.5" y2="12.5" />
+                      </svg>
+                      <span>Limit</span>
+                    </span>
+                  ) : (
+                    <a class="ty-download-big-btn" href={row.url} download>
+                      <svg viewBox="0 0 16 16" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2.2">
+                        <path d="M8 1v10M3 7l5 5 5-5M2 14h12" />
+                      </svg>
+                      <span>Download</span>
+                    </a>
+                  )}
+                </li>
+              ))}
+            </ul>
+
+            <div class="ty-downloads-total">
+              <span>Total paid</span>
+              <strong>{formatMoney(orderPage.order.totalAmount, orderPage.order.currency)}</strong>
+            </div>
+          </section>
+
+          <!-- Secondary section below: next steps + perks -->
+          <section class="ty-secondary">
+            <article class="ty-card ty-card--next">
+              <h2 class="ty-card-title">What next?</h2>
+
+              <ul class="ty-steps">
+                <li class="ty-step">
+                  <span class="ty-step-num">1</span>
+                  <div>
+                    <strong>Download and save locally</strong>
+                    <p>
+                      Each line item can be downloaded up to <strong>{MAX_DOWNLOADS} times</strong> during the
+                      {` ${ttlLabel}`} link window.
+                    </p>
+                  </div>
+                </li>
+                <li class="ty-step">
+                  <span class="ty-step-num">2</span>
+                  <div>
+                    <strong>Do not see the email?</strong>
+                    <p>
+                      Check promotions, updates, and spam. Some inboxes take a minute or two to deliver
+                      transactional mail.
+                    </p>
+                  </div>
+                </li>
+                <li class="ty-step">
+                  <span class="ty-step-num">3</span>
+                  <div>
+                    <strong>Replace these steps with your onboarding</strong>
+                    <p>
+                      Use this section to tell buyers exactly what to do after downloading your product.
+                    </p>
+                  </div>
+                </li>
+              </ul>
+            </article>
+
+            <article class="ty-card ty-card--perks">
+              <h2 class="ty-card-title">Your guarantees</h2>
+              <div class="ty-perks">
+                <div class="ty-perk">
+                  <span class="ty-perk-icon">🛡️</span>
+                  <div>
+                    <strong>Your guarantee</strong>
+                    <span>Replace with your refund policy</span>
+                  </div>
+                </div>
+                <div class="ty-perk">
+                  <span class="ty-perk-icon">⚡</span>
+                  <div>
+                    <strong>Instant access</strong>
+                    <span>Download links on this page and by email</span>
+                  </div>
+                </div>
+                <div class="ty-perk">
+                  <span class="ty-perk-icon">💬</span>
+                  <div>
+                    <strong>Support</strong>
+                    <span>Replace with your support promise</span>
+                  </div>
+                </div>
+              </div>
+            </article>
+          </section>
+
+          <section class="ty-help">
+            <h3>Need help? Email <a href="mailto:support@example.com">support@example.com</a></h3>
+            <p class="ty-help-meta">
+              Include order reference <code>#{orderRefShort}</code> so support can find the purchase quickly.
+            </p>
+          </section>
+        </>
+      ) : (
+        <section class="ty-error">
+          <div class="ty-error-icon" aria-hidden="true">⚠️</div>
+          <span class="ty-eyebrow">Order not found</span>
+          <h1 class="ty-title">We could not load this order.</h1>
+          <p class="ty-subtitle">
+            {errorMessage === "Order not found" || errorMessage === "Order id missing"
+              ? "The order reference is invalid or the order is still syncing. Refresh in a moment."
+              : errorMessage}
+          </p>
+          <div class="ty-error-actions">
+            <a class="ty-cta" href="/">Back home</a>
+            <a class="ty-cta-secondary" href="/checkout">Back to checkout</a>
+          </div>
+        </section>
+      )
+    }
+  </main>
+
+  {
+    orderPage && (
+      <>
+        <div
+          class="sr-only"
+          data-page-config="thank-you"
+          data-order-id={orderPage.order.id}
+          data-posthog-key={import.meta.env.PUBLIC_POSTHOG_KEY}
+          data-api-host={import.meta.env.PUBLIC_POSTHOG_HOST}
+          data-meta-pixel-id={import.meta.env.PUBLIC_META_PIXEL_ID}
+          data-anonymous-id={Astro.locals.anonymousId}
+          data-purchase-event-id={purchase?.eventId ?? ""}
+          data-purchase-value={purchase ? String(purchase.value) : ""}
+          data-purchase-currency={purchase?.currency ?? ""}
+          data-purchase-contents={purchase ? JSON.stringify(purchase.contents) : ""}
+          data-purchase-num-items={purchase ? String(purchase.numItems) : ""}
+          data-order-confirmed={orderConfirmedPayload ? JSON.stringify(orderConfirmedPayload) : ""}
+        ></div>
+        <script>
+          import "../../lib/client/page-thank-you";
+        </script>
+        <script>
+          // After a download click, refresh the page after a short delay so the
+          // remaining-uses counter reflects the new state. The download itself
+          // happens via a regular `<a download>` link, we don't intercept the
+          // request, just trigger a soft re-render.
+          document.querySelectorAll<HTMLAnchorElement>(".ty-download-big-btn[href]").forEach((a) => {
+            a.addEventListener("click", () => {
+              window.setTimeout(() => window.location.reload(), 1500);
+            });
+          });
+        </script>
+      </>
+    )
+  }
+</FunnelLayout>
