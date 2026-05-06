@@ -99,7 +99,7 @@ if (config) {
       stripeInstance = stripeWindow.Stripe(stripePublishableKey, { locale: "pl" });
     }
     if (!stripeInstance) {
-      throw new Error("Stripe nie został zainicjowany.");
+      throw new Error("Stripe was not initialized.");
     }
     return stripeInstance;
   };
@@ -119,6 +119,16 @@ if (config) {
     blikStatus.textContent = message;
   };
 
+  let activeOnConfirm: (() => void) | null = null;
+  let activeOnCancel: (() => void) | null = null;
+
+  const detachBlikHandlers = () => {
+    if (activeOnConfirm) blikConfirm?.removeEventListener("click", activeOnConfirm);
+    if (activeOnCancel) blikCancel?.removeEventListener("click", activeOnCancel);
+    activeOnConfirm = null;
+    activeOnCancel = null;
+  };
+
   const closeBlikModal = () => {
     if (!blikModal) return;
     blikModal.hidden = true;
@@ -129,54 +139,68 @@ if (config) {
     }
   };
 
-  let blikHandlerWired = false;
+  const reportOfferFailure = (method: "blik" | "p24", error: unknown) => {
+    const message = error instanceof Error ? error.message : String(error ?? "unknown");
+    captureAnalyticsEvent("Offer Payment Failed", {
+      method,
+      error: message,
+      offer_kind: offerKind,
+      offer_sku: offerSku,
+      order_id: orderId
+    });
+  };
+
   const wireBlikHandlers = (clientSecret: string) => {
-    // Each call re-binds because clientSecret changes per attempt. Use
-    // capture/once so handlers don't pile up.
-    blikHandlerWired = true;
-    const onConfirm = async () => {
-      const code = (blikInput?.value ?? "").trim();
-      if (!/^\d{6}$/.test(code)) {
-        showBlikStatus("The payment code must have 6 digits.", "error");
-        return;
-      }
-      try {
-        blikConfirm?.toggleAttribute("disabled", true);
-        blikCancel?.toggleAttribute("disabled", true);
-        showBlikStatus("Sprawdź aplikację banku — czekam na potwierdzenie…");
-        const stripe = await ensureStripeInstance();
-        const { error } = await stripe.confirmBlikPayment(clientSecret, {
-          payment_method: {
-            // Empty object tells Stripe to create a fresh BLIK PaymentMethod
-            // (we own the code in payment_method_options below).
-            blik: {},
-            billing_details: buyerEmail ? { email: buyerEmail } : {}
-          },
-          payment_method_options: {
-            blik: { code }
-          }
-        });
-        if (error) {
-          showBlikStatus(error.message ?? "Payment confirmation failed.", "error");
-          blikConfirm?.removeAttribute("disabled");
-          blikCancel?.removeAttribute("disabled");
+    detachBlikHandlers();
+    activeOnConfirm = () => {
+      void (async () => {
+        const code = (blikInput?.value ?? "").trim();
+        if (!/^\d{6}$/.test(code)) {
+          showBlikStatus("The payment code must have 6 digits.", "error");
           return;
         }
-        // PI is now 'succeeded' or 'processing'. Webhook finalizes the offer
-        // server-side. Redirect; thank-you page handles 'still processing' UI.
-        window.location.assign(`/thank-you/${orderId}`);
-      } catch (e) {
-        showBlikStatus(e instanceof Error ? e.message : "Payment confirmation failed.", "error");
-        blikConfirm?.removeAttribute("disabled");
-        blikCancel?.removeAttribute("disabled");
-      }
+        try {
+          blikConfirm?.toggleAttribute("disabled", true);
+          blikCancel?.toggleAttribute("disabled", true);
+          showBlikStatus("Check your banking app to confirm the payment.");
+          const stripe = await ensureStripeInstance();
+          const { error } = await stripe.confirmBlikPayment(clientSecret, {
+            payment_method: {
+              // Empty object tells Stripe to create a fresh BLIK PaymentMethod
+              // (we own the code in payment_method_options below).
+              blik: {},
+              billing_details: buyerEmail ? { email: buyerEmail } : {}
+            },
+            payment_method_options: {
+              blik: { code }
+            }
+          });
+          if (error) {
+            reportOfferFailure("blik", error.message ?? "stripe confirm error");
+            showBlikStatus(error.message ?? "Payment confirmation failed.", "error");
+            blikConfirm?.removeAttribute("disabled");
+            blikCancel?.removeAttribute("disabled");
+            return;
+          }
+          // PI is now 'succeeded' or 'processing'. Webhook finalizes the offer
+          // server-side. Redirect; thank-you page handles 'still processing' UI.
+          detachBlikHandlers();
+          window.location.assign(`/thank-you/${orderId}`);
+        } catch (e) {
+          reportOfferFailure("blik", e);
+          showBlikStatus(e instanceof Error ? e.message : "Payment confirmation failed.", "error");
+          blikConfirm?.removeAttribute("disabled");
+          blikCancel?.removeAttribute("disabled");
+        }
+      })();
     };
-    const onCancel = () => {
+    activeOnCancel = () => {
+      detachBlikHandlers();
       closeBlikModal();
       setBusy(false);
     };
-    blikConfirm?.addEventListener("click", onConfirm, { once: true });
-    blikCancel?.addEventListener("click", onCancel, { once: true });
+    blikConfirm?.addEventListener("click", activeOnConfirm);
+    blikCancel?.addEventListener("click", activeOnCancel);
   };
 
   const openBlikModal = (clientSecret: string) => {
@@ -191,12 +215,7 @@ if (config) {
     }
     blikConfirm?.removeAttribute("disabled");
     blikCancel?.removeAttribute("disabled");
-    if (!blikHandlerWired) {
-      wireBlikHandlers(clientSecret);
-    } else {
-      // Re-wire once handlers were used and detached.
-      wireBlikHandlers(clientSecret);
-    }
+    wireBlikHandlers(clientSecret);
   };
 
   const triggerP24 = async (clientSecret: string) => {
@@ -213,6 +232,7 @@ if (config) {
     // confirmP24Payment navigates to the bank on success. If we're still here,
     // an error happened.
     if (error) {
+      reportOfferFailure("p24", error.message ?? "stripe confirm error");
       throw new Error(error.message ?? "Redirect payment failed.");
     }
   };
