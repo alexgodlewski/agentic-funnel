@@ -521,9 +521,10 @@ if (config) {
         radios: true,
         spacedAccordionItems: false
       },
-      // Order in accordion list. Wallets first (highest conversion when natively
-      // supported by the browser), then BLIK, then card, klarna, p24.
-      paymentMethodOrder: ["apple_pay", "google_pay", "blik", "card", "klarna", "p24"],
+      // Order in accordion list. Wallets first (highest conversion when
+      // natively supported by the browser), then BLIK, card, and the
+      // redirect-based options (klarna, p24, paypal) at the bottom.
+      paymentMethodOrder: ["apple_pay", "google_pay", "blik", "card", "klarna", "p24", "paypal"],
       // Hide email field only when we actually have it from lead capture —
       // otherwise let Stripe collect it (otherwise confirmPayment errors with
       // "did not pass confirmParams.payment_method_data.billing_details.email").
@@ -991,6 +992,10 @@ if (config) {
         const { error, paymentIntent } = await stripeInstance.confirmPayment({
           elements: stripeElements,
           confirmParams: {
+            // Required for redirect-based methods such as P24, Klarna, and
+            // PayPal. Stripe rejects confirmPayment when the selected method
+            // needs a redirect and no return_url is supplied.
+            return_url: `${window.location.origin}/checkout?return=1`,
             // Required because Payment Element was created with
             // fields.billingDetails.email = "never" — we own the email field
             // (lead capture step) so Stripe needs it explicitly here.
