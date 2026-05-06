@@ -110,7 +110,7 @@ const bumpsForClient = funnel.orderBumps.map((b) => ({
               <div class="bump-body">
                 {bump.image && (
                   <figure class="bump-figure" aria-hidden="true">
-                    <img src={bump.image} alt="" loading="lazy" />
+                    <img src={bump.image} alt="" width="900" height="700" loading="lazy" decoding="async" />
                   </figure>
                 )}
                 <div class="bump-copy">

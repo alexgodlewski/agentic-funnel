@@ -121,7 +121,7 @@ const STARTER_FUNNEL_COPY: Partial<Record<StripeSlot, SlotCopy>> = {
       ],
       closer:
         "Select this add-on to include the templates in the same order and fulfillment email.",
-      image: "/starter-bump-1.png"
+      image: "/starter-bump-1.webp"
     }
   },
   ORDER_BUMP_2: {
@@ -140,7 +140,7 @@ const STARTER_FUNNEL_COPY: Partial<Record<StripeSlot, SlotCopy>> = {
         "A short audio version of the core material for buyers who want to review the offer while commuting, walking, or working.",
       bullets: ["Portable lesson files", "Quick recap track", "Buyer action prompts"],
       closer: "This is a starter example. Replace it with the upgrade that makes sense for your product.",
-      image: "/starter-bump-2.png"
+      image: "/starter-bump-2.webp"
     }
   },
   OTO: {

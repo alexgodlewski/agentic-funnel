@@ -479,9 +479,12 @@ if (config) {
         klarna: "never"
       },
       buttonHeight: 48,
+      // Stripe enforces: overflow:"never" requires maxRows:0 (= no cap).
+      // We only render Apple Pay + Google Pay here, so there are at most two
+      // buttons and no overflow row appears in practice.
       layout: {
         maxColumns: 2,
-        maxRows: 1,
+        maxRows: 0,
         overflow: "never"
       }
     });
